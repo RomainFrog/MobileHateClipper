@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 hateful_memes/
-
+*.ipynb
 # C extensions
 *.so
 
