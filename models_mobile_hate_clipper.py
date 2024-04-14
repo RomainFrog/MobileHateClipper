@@ -41,8 +41,8 @@ class MobileHateClipper(nn.Module):
         text_features = self.clip.encode_text(text)
 
         # normalize features
-        image_features = torch.nn.functional.normalize(image_features, p=2, dim=-1, keepdim=True)
-        text_features = torch.nn.functional.normalize(text_features, p=2, dim=-1, keepdim=True)
+        image_features = torch.nn.functional.normalize(image_features, p=2, dim=-1)
+        text_features = torch.nn.functional.normalize(text_features, p=2, dim=-1)
 
         # project features in FMI space
         image_features = self.image_projection(image_features)
