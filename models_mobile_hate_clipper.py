@@ -4,7 +4,7 @@ import torch.nn as nn
 import mobileclip
 
 class MobileHateClipper(nn.Module):
-    def __init__(self, fusion='align', num_pre_output_layers=2, clip_model=None):
+    def __init__(self, fusion='align', embed_dim = 1024, num_pre_output_layers=2, clip_model=None):
         super().__init__()
 
         # --------------------------------------------------------------
@@ -13,8 +13,8 @@ class MobileHateClipper(nn.Module):
         for param in self.clip.parameters():
             param.requires_grad = False
 
-        self.image_projection = torch.nn.Linear(512, 512)
-        self.text_projection = torch.nn.Linear(512, 512)
+        self.image_projection = torch.nn.Linear(512, embed_dim)
+        self.text_projection = torch.nn.Linear(512, embed_dim)
         # --------------------------------------------------------------
 
         # --------------------------------------------------------------
@@ -26,12 +26,12 @@ class MobileHateClipper(nn.Module):
         # MHC output specifics
         self.num_pre_output_layers = num_pre_output_layers
         self.pre_output_layers = torch.nn.ModuleList([torch.nn.Sequential(
-            torch.nn.Linear(512, 512),
+            torch.nn.Linear(embed_dim, embed_dim),
             torch.nn.ReLU(),
             torch.nn.Dropout(0.1)
         ) for _ in range(self.num_pre_output_layers)])
 
-        self.output_layer = torch.nn.Linear(512, 1)
+        self.output_layer = torch.nn.Linear(embed_dim, 1)
         # --------------------------------------------------------------
 
     def forward(self, image, text):
@@ -71,6 +71,7 @@ def create_model(args):
     clip_model, _, _ = mobileclip.create_model_and_transforms(args.clip_model, pretrained=checkpoint_path)
     return MobileHateClipper(
         fusion=args.fusion,
+        embed_dim=args.embed_dim,
         num_pre_output_layers=args.num_pre_output_layers,
         clip_model=clip_model
     )

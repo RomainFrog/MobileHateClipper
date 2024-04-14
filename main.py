@@ -27,6 +27,7 @@ def get_args_parser():
     parser.add_argument('--img_size', default=244, type=int, help='image size')
     parser.add_argument('--fusion', default='align', type=str, help='fusion method')
     parser.add_argument('--num_pre_output_layers', default=2, type=int, help='number of pre-output layers')
+    parser.add_argument('--embed_dim', default=1024, type=int, help='embedding dimension')
 
     # training parameters
     parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
@@ -105,7 +106,7 @@ def main(args):
     print(f"\nStart training for {args.epochs} epochs")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
-        
+
         train_stats = train_one_epoch(
             model=model, criterion=criterion, 
             data_loader=data_loader_train, 
