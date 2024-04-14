@@ -33,6 +33,7 @@ def get_args_parser():
     parser.add_argument('--finetune', default='', type=str, help='finetune from checkpoint')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight decay')
+    parser.add_argument('--clip_grad_norm', default=0.1, type=float, help='clip grad norm')
     parser.add_argument('--epochs', default=10, type=int, help='number of training epochs')
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
 
@@ -104,10 +105,17 @@ def main(args):
     print(f"\nStart training for {args.epochs} epochs")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
-        train_one_epoch(model, optimizer, data_loader_train, device, criterion)
-        evaluate(model, data_loader_val, device, criterion)
-        end_time = time.time()
-        print(f"Epoch {epoch} took {end_time - start_time} seconds")
+        
+        train_stats = train_one_epoch(
+            model=model, criterion=criterion, 
+            data_loader=data_loader_train, 
+            optimizer=optimizer, device=device, 
+            epoch=epoch, max_grad_norm=args.clip_grad_norm)
+        
+        val_stats = evaluate(model, data_loader_val, device, criterion)
+        print(f"Epoch {epoch} | Train Loss: {train_stats['loss']:.4f} | Val Loss: {val_stats['loss']:.4f}")
+        print(f'Accuracy: {val_stats["accuracy"]:.4f} | F1: {val_stats["f1"]:.4f} | AUROC: {val_stats["auroc"]:.4f}\n')
+                
         
 
     total_time = time.time() - start_time

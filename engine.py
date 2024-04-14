@@ -1,17 +1,22 @@
 import torch
+import torch.nn as nn
+
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import f1_score
 from sklearn.metrics import roc_auc_score
-import torch.nn as nn
 
-def train_one_epoch(model, optimizer, train_loader, device, criterion):
+from typing import Iterable
+
+def train_one_epoch(model: torch.nn.Module, criterion:torch.nn.Module,
+                    data_loader: Iterable, optimizer: torch.optim.Optimizer,
+                    device: torch.device, epoch=int, max_grad_norm: float = 0.1):
     model.train()
     model.to(device)
 
     total_loss = 0.0
-    num_batches = len(train_loader)
+    num_batches = len(data_loader)
 
-    for batch_idx, (imgs, texts, labels) in enumerate(train_loader):
+    for batch_idx, (imgs, texts, labels) in enumerate(data_loader):
         imgs = imgs.to(device)
         texts = texts.to(device)
         labels = labels.to(device)
@@ -19,6 +24,10 @@ def train_one_epoch(model, optimizer, train_loader, device, criterion):
         optimizer.zero_grad()
         output = model(imgs, texts)
         loss = criterion(output.squeeze(), labels.float())
+
+        # add gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
         loss.backward()
         optimizer.step()
 
@@ -26,12 +35,11 @@ def train_one_epoch(model, optimizer, train_loader, device, criterion):
 
         # Log progress
         if (batch_idx + 1) % 10 == 0:
-            print(f"Batch [{batch_idx+1}/{num_batches}], Loss: {loss.item()}")
+            print(f"Epoch[{epoch}] [{batch_idx+1}/{num_batches}], Loss: {loss.item():.4f} ({total_loss / (batch_idx + 1):.4f})")
 
     avg_loss = total_loss / num_batches
-    print(f"Average Loss: {avg_loss}")
 
-    return avg_loss
+    return {"loss": avg_loss}
 
 
 def evaluate(model, val_loader, device, criterion):
@@ -61,17 +69,10 @@ def evaluate(model, val_loader, device, criterion):
             targets.extend(labels.cpu().numpy())
 
     avg_loss = total_loss / num_batches
-    print(f"Validation Loss: {avg_loss}")
 
     # Compute accuracy, F1 score, and AUROC
     accuracy = accuracy_score(targets, predictions)
     f1 = f1_score(targets, predictions)
     auroc = roc_auc_score(targets, predictions)
 
-    print(f"Accuracy: {accuracy}")
-    print(f"F1 Score: {f1}")
-    print(f"AUROC: {auroc}")
-
-    return avg_loss, accuracy, f1, auroc
-
-    return avg_loss
+    return {"loss": avg_loss, "accuracy": accuracy, "f1": f1, "auroc": auroc}
