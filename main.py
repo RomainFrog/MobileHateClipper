@@ -105,8 +105,7 @@ def main(args):
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         train_one_epoch(model, optimizer, data_loader_train, device, criterion)
-        # TODO: evaluate
-        # LOG time
+        evaluate(model, data_loader_val, device, criterion)
         end_time = time.time()
         print(f"Epoch {epoch} took {end_time - start_time} seconds")
         
