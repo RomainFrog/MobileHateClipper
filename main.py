@@ -27,7 +27,7 @@ def get_args_parser():
     parser.add_argument('--img_size', default=244, type=int, help='image size')
     parser.add_argument('--fusion', default='align', type=str, help='fusion method')
     parser.add_argument('--num_pre_output_layers', default=2, type=int, help='number of pre-output layers')
-    parser.add_argument('--embed_dim', default=1024, type=int, help='embedding dimension')
+    parser.add_argument('--embed_dim', default=768, type=int, help='embedding dimension')
 
     # training parameters
     parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
@@ -97,10 +97,11 @@ def main(args):
         {"params": [p for n, p in model.named_parameters() if p.requires_grad]}
     ]
 
-    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
-    criterion = torch.nn.BCEWithLogitsLoss()
-    print(f"Optimizer: {optimizer}")
-    print(f"Criterion: {criterion}")
+    optimizer = torch.optim.Adam(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
+    criterion = torch.nn.BCEWithLogitsLoss(reduction='mean')
+    #criterion = torch.nn.CrossEntropyLoss()
+    print(f'Optimize: {optimizer}')
+    print(f'Criterion: {criterion}')
 
     # training loop
     print(f"\nStart training for {args.epochs} epochs")

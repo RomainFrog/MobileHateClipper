@@ -12,23 +12,35 @@ class MobileHateClipper(nn.Module):
         self.clip = clip_model
         for param in self.clip.parameters():
             param.requires_grad = False
-
+    
+        self.embed_dim = embed_dim
         self.image_projection = torch.nn.Linear(512, embed_dim)
+        self.image_dropout = torch.nn.Dropout(0.1)
         self.text_projection = torch.nn.Linear(512, embed_dim)
+        self.text_dropout = torch.nn.Dropout(0.1)
         # --------------------------------------------------------------
 
         # --------------------------------------------------------------
         # MHC Feature Interaction Matrix specifics
         self.fusion = fusion
+        if self.fusion == 'align':
+            self.pre_output_input_dim = self.embed_dim
+        elif self.fusion == 'concat':
+            self.pre_output_input_dim = self.embed_dim * 2
+        elif self.fusion == 'cross':
+            self.pre_output_input_dim = self.embed_dim ** 2
+        else:
+            raise ValueError("fusion mode must be [align, concat, cross]")
         # --------------------------------------------------------------
 
         # --------------------------------------------------------------
         # MHC output specifics
+        self.pre_dropout = torch.nn.Dropout(0.2)
         self.num_pre_output_layers = num_pre_output_layers
         self.pre_output_layers = torch.nn.ModuleList([torch.nn.Sequential(
             torch.nn.Linear(embed_dim, embed_dim),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(0.1)
+            torch.nn.Dropout(0.2),
+            nn.ReLU()
         ) for _ in range(self.num_pre_output_layers)])
 
         self.output_layer = torch.nn.Linear(embed_dim, 1)
@@ -48,21 +60,29 @@ class MobileHateClipper(nn.Module):
         image_features = self.image_projection(image_features)
         text_features = self.text_projection(text_features)
 
+        # dropout                                           
+        image_features = self.image_dropout(image_features)                                
+        text_features = self.text_dropout(text_features)
+
+        image_features = nn.ReLU()(image_features)
+        text_features = nn.ReLU()(text_features)
+
         # FMI fusion
         if self.fusion == "align":
-            features = torch.mul(image_features, text_features)
+            features = torch.mul(image_features, text_features) # [N, d]
         elif self.fusion == "cross":
-            features = torch.bmm(image_features, text_features.transpose(1, 2))
+            features = torch.bmm(image_features.unsqueeze(2), text_features.unsqueeze(1)) # [N, d, d]
         else:
             raise ValueError("Invalid fusion method")
         
         # pre-output layers
+        features = self.pre_dropout(features)
         for layer in self.pre_output_layers:
             features = layer(features)
 
-        output = self.output_layer(features)
+        logits = self.output_layer(features)
 
-        return output
+        return logits
     
 
 
