@@ -27,7 +27,9 @@ def get_args_parser():
     parser.add_argument('--img_size', default=244, type=int, help='image size')
     parser.add_argument('--fusion', default='align', type=str, help='fusion method')
     parser.add_argument('--num_pre_output_layers', default=2, type=int, help='number of pre-output layers')
-    parser.add_argument('--embed_dim', default=768, type=int, help='embedding dimension')
+    parser.add_argument('--embed_dim', default=1024, type=int, help='embedding dimension')
+    parser.add_argument('--pre_output_dim', default=512, type=int, help='pre-output dimension')
+    parser.add_argument('--dropouts', default=[0.1, 0.4, 0.2], type=list, help='Dropouts for projection, fusion and pre-output layers')
 
     # training parameters
     parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')

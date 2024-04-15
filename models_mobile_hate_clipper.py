@@ -1,10 +1,13 @@
 import torch
 import os
 import torch.nn as nn
+import torch.nn.functional as F
 import mobileclip
 
 class MobileHateClipper(nn.Module):
-    def __init__(self, fusion='align', embed_dim = 1024, num_pre_output_layers=2, clip_model=None):
+    def __init__(self, fusion='align', embed_dim = 1024, pre_output_dim=512,
+                num_mapping_layers = 1, num_pre_output_layers=2, clip_model=None,
+                dropout_rates=[0.1, 0.4, 0.2]):
         super().__init__()
 
         # --------------------------------------------------------------
@@ -14,10 +17,16 @@ class MobileHateClipper(nn.Module):
             param.requires_grad = False
     
         self.embed_dim = embed_dim
-        self.image_projection = torch.nn.Linear(512, embed_dim)
-        self.image_dropout = torch.nn.Dropout(0.1)
-        self.text_projection = torch.nn.Linear(512, embed_dim)
-        self.text_dropout = torch.nn.Dropout(0.1)
+        self.num_mapping_layers = num_mapping_layers
+        image_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
+        text_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
+        for _ in range(1, num_mapping_layers):
+            image_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[1])])
+            text_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[1])])
+
+        self.image_projection = nn.Sequential(*image_mapping_layers)
+        self.text_projection = nn.Sequential(*text_mapping_layers)
+
         # --------------------------------------------------------------
 
         # --------------------------------------------------------------
@@ -30,20 +39,21 @@ class MobileHateClipper(nn.Module):
         elif self.fusion == 'cross':
             self.pre_output_input_dim = self.embed_dim ** 2
         else:
-            raise ValueError("fusion mode must be [align, concat, cross]")
+            raise ValueError("fusion mode must be in [align, concat, cross]")
         # --------------------------------------------------------------
 
         # --------------------------------------------------------------
         # MHC output specifics
-        self.pre_dropout = torch.nn.Dropout(0.2)
-        self.num_pre_output_layers = num_pre_output_layers
-        self.pre_output_layers = torch.nn.ModuleList([torch.nn.Sequential(
-            torch.nn.Linear(embed_dim, embed_dim),
-            torch.nn.Dropout(0.2),
-            nn.ReLU()
-        ) for _ in range(self.num_pre_output_layers)])
 
-        self.output_layer = torch.nn.Linear(embed_dim, 1)
+        self.num_pre_output_layers = num_pre_output_layers
+        pre_output_layers = [nn.Dropout(p=0.2)]
+        pre_output_layers.extend([nn.Linear(self.pre_output_input_dim, pre_output_dim), nn.ReLU(), nn.Dropout(p=dropout_rates[2])])
+        for _ in range(1, num_pre_output_layers):
+            pre_output_layers.extend([nn.Linear(pre_output_dim, pre_output_dim), nn.ReLU(), nn.Dropout(p=dropout_rates[2])])
+
+        self.pre_output_layers = nn.Sequential(*pre_output_layers)
+
+        self.output_layer = nn.Linear(pre_output_dim, 1)
         # --------------------------------------------------------------
 
     def forward(self, image, text):
@@ -52,34 +62,28 @@ class MobileHateClipper(nn.Module):
         image_features = self.clip.encode_image(image)
         text_features = self.clip.encode_text(text)
 
-        # normalize features
-        image_features = torch.nn.functional.normalize(image_features, p=2, dim=-1)
-        text_features = torch.nn.functional.normalize(text_features, p=2, dim=-1)
-
-        # project features in FMI space
+        # project features
         image_features = self.image_projection(image_features)
         text_features = self.text_projection(text_features)
 
-        # dropout                                           
-        image_features = self.image_dropout(image_features)                                
-        text_features = self.text_dropout(text_features)
+        # normalize features
+        image_features = F.normalize(image_features, p=2, dim=1)
+        text_features = F.normalize(text_features, p=2, dim=1)
 
-        image_features = nn.ReLU()(image_features)
-        text_features = nn.ReLU()(text_features)
 
         # FMI fusion
         if self.fusion == "align":
             features = torch.mul(image_features, text_features) # [N, d]
+        elif self.fusion == "concat":
+            features = torch.cat([image_features, text_features], dim=1)
         elif self.fusion == "cross":
             features = torch.bmm(image_features.unsqueeze(2), text_features.unsqueeze(1)) # [N, d, d]
+            features = features.view(-1, self.embed_dim ** 2)
         else:
             raise ValueError("Invalid fusion method")
         
         # pre-output layers
-        features = self.pre_dropout(features)
-        for layer in self.pre_output_layers:
-            features = layer(features)
-
+        features = self.pre_output_layers(features)
         logits = self.output_layer(features)
 
         return logits
@@ -92,6 +96,8 @@ def create_model(args):
     return MobileHateClipper(
         fusion=args.fusion,
         embed_dim=args.embed_dim,
+        pre_output_dim=args.pre_output_dim,
         num_pre_output_layers=args.num_pre_output_layers,
-        clip_model=clip_model
+        clip_model=clip_model,
+        dropout_rates=args.dropouts
     )
