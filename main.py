@@ -20,16 +20,18 @@ def get_args_parser():
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
     parser.add_argument('--seed', default=42, type=int, help='seed for training')
     parser.add_argument('--shuffle', default=True, type=bool, help='shuffle dataset')
+    parser.add_argument('--log_dir', default='./log_dir', type=Path, help='path to save lof gile')
 
     # model parameters
     parser.add_argument('--clip_model', default='mobileclip_s0', type=str, help='CLIP model name')
     parser.add_argument('--clip_checkpoint', default='checkpoints', type=Path, help='path to CLIP model checkpoints')
-    parser.add_argument('--img_size', default=244, type=int, help='image size')
+    parser.add_argument('--img_size', default=256, type=int, help='image size')
     parser.add_argument('--fusion', default='align', type=str, help='fusion method')
     parser.add_argument('--num_pre_output_layers', default=2, type=int, help='number of pre-output layers')
     parser.add_argument('--embed_dim', default=1024, type=int, help='embedding dimension')
     parser.add_argument('--pre_output_dim', default=512, type=int, help='pre-output dimension')
-    parser.add_argument('--dropouts', default=[0.1, 0.4, 0.2], type=list, help='Dropouts for projection, fusion and pre-output layers')
+    parser.add_argument('--dropouts', default=[0.1, 0.4, 0.1], type=list, help='dropouts for projection, fusion and pre-output layers')
+    parser.add_argument('--freeze_clip', default=True, type=bool, help='freeze the clip encoder')
 
     # training parameters
     parser.add_argument('--batch_size', default=64, type=int, help='Batch size for training')
@@ -63,7 +65,6 @@ def main(args):
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train,
         batch_size=args.batch_size,
-        shuffle=args.shuffle,
         num_workers=4,
         pin_memory=True,
         drop_last=True,
@@ -99,7 +100,7 @@ def main(args):
         {"params": [p for n, p in model.named_parameters() if p.requires_grad]}
     ]
 
-    optimizer = torch.optim.Adam(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.98))
     criterion = torch.nn.BCEWithLogitsLoss(reduction='mean')
     #criterion = torch.nn.CrossEntropyLoss()
     print(f'Optimize: {optimizer}')
@@ -125,6 +126,10 @@ def main(args):
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
+    
+    # stats on the training set
+    train_stats = evaluate(model, data_loader_train, device, criterion)
+    print(f'Accuracy: {train_stats["accuracy"]:.4f} | F1: {train_stats["f1"]:.4f} | AUROC: {train_stats["auroc"]:.4f}\n')
 
     # save model
     if args.output_dir:

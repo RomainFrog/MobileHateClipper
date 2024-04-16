@@ -7,22 +7,23 @@ import mobileclip
 class MobileHateClipper(nn.Module):
     def __init__(self, fusion='align', embed_dim = 1024, pre_output_dim=512,
                 num_mapping_layers = 1, num_pre_output_layers=2, clip_model=None,
-                dropout_rates=[0.1, 0.4, 0.2]):
+                dropout_rates=[0.1, 0.4, 0.2], freeze_clip=True):
         super().__init__()
 
         # --------------------------------------------------------------
         # MHC encoding specifics
         self.clip = clip_model
-        for param in self.clip.parameters():
-            param.requires_grad = False
+        if freeze_clip:
+            for param in self.clip.parameters():
+                param.requires_grad = False
     
         self.embed_dim = embed_dim
         self.num_mapping_layers = num_mapping_layers
         image_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
         text_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
         for _ in range(1, num_mapping_layers):
-            image_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[1])])
-            text_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[1])])
+            image_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])])
+            text_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])])
 
         self.image_projection = nn.Sequential(*image_mapping_layers)
         self.text_projection = nn.Sequential(*text_mapping_layers)
@@ -46,7 +47,7 @@ class MobileHateClipper(nn.Module):
         # MHC output specifics
 
         self.num_pre_output_layers = num_pre_output_layers
-        pre_output_layers = [nn.Dropout(p=0.2)]
+        pre_output_layers = [nn.Dropout(p=dropout_rates[1])]
         pre_output_layers.extend([nn.Linear(self.pre_output_input_dim, pre_output_dim), nn.ReLU(), nn.Dropout(p=dropout_rates[2])])
         for _ in range(1, num_pre_output_layers):
             pre_output_layers.extend([nn.Linear(pre_output_dim, pre_output_dim), nn.ReLU(), nn.Dropout(p=dropout_rates[2])])
@@ -99,5 +100,5 @@ def create_model(args):
         pre_output_dim=args.pre_output_dim,
         num_pre_output_layers=args.num_pre_output_layers,
         clip_model=clip_model,
-        dropout_rates=args.dropouts
-    )
+        dropout_rates=args.dropouts,
+        freeze_clip=args.freeze_clip)
