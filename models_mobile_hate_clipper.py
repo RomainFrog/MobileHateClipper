@@ -1,7 +1,7 @@
 import torch
 import os
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F 
 import mobileclip
 
 class MobileHateClipper(nn.Module):
@@ -99,6 +99,7 @@ def create_model(args):
         embed_dim=args.embed_dim,
         pre_output_dim=args.pre_output_dim,
         num_pre_output_layers=args.num_pre_output_layers,
+        num_mapping_layers = args.num_mapping_layers,
         clip_model=clip_model,
         dropout_rates=args.dropouts,
         freeze_clip=args.freeze_clip)

@@ -28,9 +28,10 @@ def get_args_parser():
     parser.add_argument('--img_size', default=256, type=int, help='image size')
     parser.add_argument('--fusion', default='align', type=str, help='fusion method')
     parser.add_argument('--num_pre_output_layers', default=2, type=int, help='number of pre-output layers')
+    parser.add_argument('--num_mapping_layers', default=1, type=int, help='number of mapping layers')
     parser.add_argument('--embed_dim', default=1024, type=int, help='embedding dimension')
     parser.add_argument('--pre_output_dim', default=512, type=int, help='pre-output dimension')
-    parser.add_argument('--dropouts', default=[0.1, 0.4, 0.1], type=list, help='dropouts for projection, fusion and pre-output layers')
+    parser.add_argument('--dropouts', default=[0.2, 0.4, 0.1], type=list, help='dropouts for projection, fusion and pre-output layers')
     parser.add_argument('--freeze_clip', default=True, type=bool, help='freeze the clip encoder')
 
     # training parameters
@@ -66,8 +67,9 @@ def main(args):
         dataset_train,
         batch_size=args.batch_size,
         num_workers=4,
+        shuffle=False,
         pin_memory=True,
-        drop_last=True,
+        # drop_last=True,
     )
 
     data_loader_val = torch.utils.data.DataLoader(
@@ -100,7 +102,8 @@ def main(args):
         {"params": [p for n, p in model.named_parameters() if p.requires_grad]}
     ]
 
-    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.98))
+    # optimizer = torch.optim.SGD(param_dicts, lr=args.lr, weight_decay=args.weight_decay) 
+    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.999), amsgrad=True)
     criterion = torch.nn.BCEWithLogitsLoss(reduction='mean')
     #criterion = torch.nn.CrossEntropyLoss()
     print(f'Optimize: {optimizer}')
