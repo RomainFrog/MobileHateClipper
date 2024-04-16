@@ -120,6 +120,12 @@ def main(args):
         val_stats = evaluate(model, data_loader_val, device, criterion)
         print(f"Epoch {epoch} | Train Loss: {train_stats['loss']:.4f} | Val Loss: {val_stats['loss']:.4f}")
         print(f'Accuracy: {val_stats["accuracy"]:.4f} | F1: {val_stats["f1"]:.4f} | AUROC: {val_stats["auroc"]:.4f}\n')
+
+        if args.log_dir:
+            Path(args.log_dir).mkdir(parents=True, exist_ok=True)
+            # write to log file with the following format {"train_lr":  "train_loss":, "test_loss": , "test_acc": , "test_f1": , "test_auroc": , "epoch": }
+            with open(os.path.join(args.log_dir, 'log.jsonl'), 'a') as f:
+                f.write(f'{{"train_loss": {train_stats["loss"]:.4f}, "val_loss": {val_stats["loss"]:.4f}, "val_acc": {val_stats["accuracy"]:.4f}, "val_f1": {val_stats["f1"]:.4f}, "val_auroc": {val_stats["auroc"]:.4f}, "epoch": {epoch}}}\n')
                 
         
 
