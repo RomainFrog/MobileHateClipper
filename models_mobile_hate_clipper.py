@@ -3,9 +3,11 @@ import os
 import torch.nn as nn
 import torch.nn.functional as F
 import mobileclip
+from transformers import CLIPModel
+
 
 class MobileHateClipper(nn.Module):
-    def __init__(self, fusion='align', embed_dim = 1024, pre_output_dim=512,
+    def __init__(self, fusion='align', embed_dim = 1024, encoder_dim=512, pre_output_dim=512,
                 num_mapping_layers = 1, num_pre_output_layers=2, clip_model=None,
                 dropout_rates=[0.1, 0.4, 0.2], freeze_clip=True):
         super().__init__()
@@ -19,8 +21,8 @@ class MobileHateClipper(nn.Module):
     
         self.embed_dim = embed_dim
         self.num_mapping_layers = num_mapping_layers
-        image_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
-        text_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
+        image_mapping_layers = [torch.nn.Linear(encoder_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
+        text_mapping_layers = [torch.nn.Linear(encoder_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
         for _ in range(1, num_mapping_layers):
             image_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])])
             text_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])])
@@ -60,8 +62,13 @@ class MobileHateClipper(nn.Module):
     def forward(self, image, text):
 
         # encode image and text
-        image_features = self.clip.encode_image(image)
-        text_features = self.clip.encode_text(text)
+        image_features = self.clip.vision_model(image).pooler_output
+        text_features = self.clip.text_model(text).pooler_output
+        image_features = self.clip.visual_projection(image_features)
+        text_features = self.clip.text_projection(text_features)
+
+        print(f'[INFO] {image_features.shape=}')
+        print(f'[INFO] {text_features.shape=}')
 
         # project features
         image_features = self.image_projection(image_features)
@@ -92,8 +99,13 @@ class MobileHateClipper(nn.Module):
 
 
 def create_model(args):
-    checkpoint_path = os.path.join(args.clip_checkpoint, f'{args.clip_model}.pt')
-    clip_model, _, _ = mobileclip.create_model_and_transforms(args.clip_model, pretrained=checkpoint_path)
+    clip_model = None
+    if args.clip_model.startswith('mobileclip'):
+        checkpoint_path = os.path.join(args.clip_checkpoint, f'{args.clip_model}.pt')
+        clip_model, _, _ = mobileclip.create_model_and_transforms(args.clip_model, pretrained=checkpoint_path)
+    else:
+        clip_model = CLIPModel.from_pretrained(args.clip_model)
+
     return MobileHateClipper(
         fusion=args.fusion,
         embed_dim=args.embed_dim,

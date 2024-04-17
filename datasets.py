@@ -4,6 +4,8 @@ import json
 from PIL import Image
 from torch.utils.data import Dataset
 import mobileclip
+from transformers import CLIPTokenizer, CLIPProcessor
+
 
 class HatefulMemesDataset(Dataset):
     def __init__(self, data_dir, img_dir, split='train', img_size=256, clip_model='mobileclip_s0', clip_dir='checkpoints'):
@@ -12,10 +14,14 @@ class HatefulMemesDataset(Dataset):
         self.split = split
         self.img_size = img_size
         self.data = [json.loads(line) for line in open(os.path.join(data_dir, f'{split}.jsonl'), 'r')]
-        checkpoint_path = os.path.join(clip_dir, f'{clip_model}.pt')
-        _, _, preprocess = mobileclip.create_model_and_transforms(clip_model, pretrained=checkpoint_path)
-        self.processor = preprocess
-        self.tokenizer = mobileclip.get_tokenizer(clip_model)
+        if clip_model.startswith('mobileclip'):
+            checkpoint_path = os.path.join(clip_dir, f'{clip_model}.pt')
+            _, _, preprocess = mobileclip.create_model_and_transforms(clip_model, pretrained=checkpoint_path)
+            self.processor = preprocess
+            self.tokenizer = mobileclip.get_tokenizer(clip_model)
+        else:
+            self.processor = CLIPProcessor.from_pretrained(clip_model)
+            self.tokenizer = CLIPTokenizer.from_pretrained(clip_model)
 
     def __len__(self):
         return len(self.data)
@@ -26,10 +32,12 @@ class HatefulMemesDataset(Dataset):
         raw_img = Image.open(img_path).convert('RGB').resize((self.img_size, self.img_size))
 
         raw_text = self.data[idx]['text']
-        tokenized_text = self.tokenizer(raw_text).squeeze(0) # (sequlen,)
+        tokenized_text = self.tokenizer(raw_text, padding=True, return_tensors="pt", truncation=True)['input_ids']
+        tokenized_text = torch.cat([tokenized_text, torch.zeros(1, 77 - tokenized_text.shape[1], dtype=tokenized_text.dtype)], dim=1).squeeze()
 
-        preprocessed_img = self.processor(raw_img) # (3, img_size, img_size)
+        preprocessed_img = self.processor(images=raw_img, return_tensors="pt")['pixel_values'].squeeze() # (3, img_size, img_size)
         label = self.data[idx]['label']
+
 
         return preprocessed_img, tokenized_text, label
     
