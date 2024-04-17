@@ -67,8 +67,8 @@ class MobileHateClipper(nn.Module):
         image_features = self.clip.visual_projection(image_features)
         text_features = self.clip.text_projection(text_features)
 
-        print(f'[INFO] {image_features.shape=}')
-        print(f'[INFO] {text_features.shape=}')
+        # print(f'[INFO] {image_features.shape=}')
+        # print(f'[INFO] {text_features.shape=}')
 
         # project features
         image_features = self.image_projection(image_features)
