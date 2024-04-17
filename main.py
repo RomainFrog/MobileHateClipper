@@ -57,8 +57,9 @@ def main(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    dataset_train = get_hateful_memes_dataset(args=args, split='train')
-    dataset_val = get_hateful_memes_dataset(args=args, split='dev_seen')
+    dataset_train = get_hateful_memes_dataset(args=args, split='train', strategy='KFold', fold=0, n_splits=5)
+    dataset_val = get_hateful_memes_dataset(args=args, split='val', strategy='KFold', fold=0, n_splits=5)
+
 
     print(f"Number of training examples: {len(dataset_train)}")
     print(f"Number of validation examples: {len(dataset_val)}")

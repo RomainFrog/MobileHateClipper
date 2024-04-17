@@ -6,6 +6,8 @@ hateful_memes/
 *.ipynb
 *.pt
 *.pth
+data_augmentation/
+experiments/
 
 
 # C extensions
