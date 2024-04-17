@@ -23,7 +23,8 @@ def train_one_epoch(model: torch.nn.Module, criterion:torch.nn.Module,
 
         optimizer.zero_grad()
         output = model(imgs, texts)
-        loss = criterion(output.squeeze(), labels.float())
+        labels = torch.stack([1-labels, labels], dim=1)
+        loss = criterion(output.squeeze().float() , labels.float())
 
         # add gradient clipping
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
@@ -59,12 +60,13 @@ def evaluate(model, val_loader, device, criterion):
             labels = labels.to(device)
 
             output = model(imgs, texts)
-            loss = criterion(output.squeeze(), labels.float())
+            labels = torch.stack([1-labels, labels], dim=1)
+            loss = criterion(output.squeeze().float() , labels.float())
 
             total_loss += loss.item()
 
             # Compute predictions and targets
-            predicted_labels = torch.round(torch.sigmoid(output))
+            predicted_labels = torch.argmax(output, dim=1)
             predictions.extend(predicted_labels.cpu().numpy())
             targets.extend(labels.cpu().numpy())
 

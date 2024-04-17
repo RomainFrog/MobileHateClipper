@@ -16,46 +16,29 @@ class MobileHateClipper(nn.Module):
         if freeze_clip:
             for param in self.clip.parameters():
                 param.requires_grad = False
+
+        ## Create a mapping from the CLIP embeddings to the transformer input
+        self.mapping = nn.Sequential(
+            nn.Linear(embed_dim, pre_output_dim),
+            nn.LayerNorm(pre_output_dim),
+            nn.ReLU()
+        )
+
+        ## Create a single transformer layer that takes as input the CLIP embeddings and outputs the predicted logits
+        self.transformer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=8, dim_feedforward=pre_output_dim, dropout=dropout_rates[0])
+
+
+        ## Create a mapping from the transformer output to the logits
+        self.pre_output = nn.Sequential(
+            nn.Linear(pre_output_dim, pre_output_dim),
+            nn.LayerNorm(pre_output_dim),
+            nn.ReLU()
+        )
+
+        ## Create a final linear layer to output the logits
+        self.output = nn.Linear(pre_output_dim, 2)
     
-        self.embed_dim = embed_dim
-        self.num_mapping_layers = num_mapping_layers
-        image_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
-        text_mapping_layers = [torch.nn.Linear(512, self.embed_dim), nn.Dropout(p=dropout_rates[0])]
-        for _ in range(1, num_mapping_layers):
-            image_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])])
-            text_mapping_layers.extend([nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim), nn.Dropout(p=dropout_rates[0])])
-
-        self.image_projection = nn.Sequential(*image_mapping_layers)
-        self.text_projection = nn.Sequential(*text_mapping_layers)
-
-        # --------------------------------------------------------------
-
-        # --------------------------------------------------------------
-        # MHC Feature Interaction Matrix specifics
-        self.fusion = fusion
-        if self.fusion == 'align':
-            self.pre_output_input_dim = self.embed_dim
-        elif self.fusion == 'concat':
-            self.pre_output_input_dim = self.embed_dim * 2
-        elif self.fusion == 'cross':
-            self.pre_output_input_dim = self.embed_dim ** 2
-        else:
-            raise ValueError("fusion mode must be in [align, concat, cross]")
-        # --------------------------------------------------------------
-
-        # --------------------------------------------------------------
-        # MHC output specifics
-
-        self.num_pre_output_layers = num_pre_output_layers
-        pre_output_layers = [nn.Dropout(p=dropout_rates[1])]
-        pre_output_layers.extend([nn.Linear(self.pre_output_input_dim, pre_output_dim), nn.ReLU(), nn.Dropout(p=dropout_rates[2])])
-        for _ in range(1, num_pre_output_layers):
-            pre_output_layers.extend([nn.Linear(pre_output_dim, pre_output_dim), nn.ReLU(), nn.Dropout(p=dropout_rates[2])])
-
-        self.pre_output_layers = nn.Sequential(*pre_output_layers)
-
-        self.output_layer = nn.Linear(pre_output_dim, 1)
-        # --------------------------------------------------------------
+        
 
     def forward(self, image, text):
 
@@ -63,29 +46,21 @@ class MobileHateClipper(nn.Module):
         image_features = self.clip.encode_image(image)
         text_features = self.clip.encode_text(text)
 
-        # project features
-        image_features = self.image_projection(image_features)
-        text_features = self.text_projection(text_features)
+        # map the CLIP embeddings to the transformer input
+        image_features = self.mapping(image_features)
+        text_features = self.mapping(text_features)
 
-        # normalize features
-        image_features = F.normalize(image_features, p=2, dim=1)
-        text_features = F.normalize(text_features, p=2, dim=1)
+        # concatenate the image and text features
+        features = torch.mul(image_features, text_features)
 
+        # pass the concatenated features through the transformer
+        features = self.transformer(features)
 
-        # FMI fusion
-        if self.fusion == "align":
-            features = torch.mul(image_features, text_features) # [N, d]
-        elif self.fusion == "concat":
-            features = torch.cat([image_features, text_features], dim=1)
-        elif self.fusion == "cross":
-            features = torch.bmm(image_features.unsqueeze(2), text_features.unsqueeze(1)) # [N, d, d]
-            features = features.view(-1, self.embed_dim ** 2)
-        else:
-            raise ValueError("Invalid fusion method")
-        
-        # pre-output layers
-        features = self.pre_output_layers(features)
-        logits = self.output_layer(features)
+        # pass the transformer output through the pre-output layers
+        features = self.pre_output(features)
+
+        # pass the pre-output through the final linear layer to get the logits
+        logits = self.output(features)
 
         return logits
     
