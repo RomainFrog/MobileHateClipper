@@ -16,11 +16,11 @@ def get_args_parser():
     # dataset parameters
     parser.add_argument('--data_dir', default='hateful_memes/', type=Path, help='path to data directory')
     parser.add_argument('--img_dir', default='hateful_memes/', type=Path, help='path to image directory')
-    parser.add_argument('--output_dir', default='./output_dir', type=Path, help='path where to save, empty for no saving')
+    parser.add_argument('--output_dir', default='./experiments/output_dir', type=Path, help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
     parser.add_argument('--seed', default=42, type=int, help='seed for training')
     parser.add_argument('--shuffle', default=True, type=bool, help='shuffle dataset')
-    parser.add_argument('--log_dir', default='./log_dir', type=Path, help='path to save lof gile')
+    parser.add_argument('--eval', action='store_true', help='evaluation only')
 
     # model parameters
     parser.add_argument('--clip_model', default='mobileclip_s0', type=str, help='CLIP model name')
@@ -110,40 +110,55 @@ def main(args):
     print(f'Optimize: {optimizer}')
     print(f'Criterion: {criterion}')
 
-    # training loop
-    print(f"\nStart training for {args.epochs} epochs")
-    start_time = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
 
-        train_stats = train_one_epoch(
-            model=model, criterion=criterion, 
-            data_loader=data_loader_train, 
-            optimizer=optimizer, device=device, 
-            epoch=epoch, max_grad_norm=args.clip_grad_norm)
+    if not args.eval:
+    # training loop
+        print(f"\nStart training for {args.epochs} epochs")
+        start_time = time.time()
+        for epoch in range(args.start_epoch, args.epochs):
+
+            train_stats = train_one_epoch(
+                model=model, criterion=criterion, 
+                data_loader=data_loader_train, 
+                optimizer=optimizer, device=device, 
+                epoch=epoch, max_grad_norm=args.clip_grad_norm)
+            
+            val_stats = evaluate(model, data_loader_val, device, criterion)
+            print(f"Epoch {epoch} | Train Loss: {train_stats['loss']:.4f} | Val Loss: {val_stats['loss']:.4f}")
+            print(f'Accuracy: {val_stats["accuracy"]:.4f} | F1: {val_stats["f1"]:.4f} | AUROC: {val_stats["auroc"]:.4f}\n')
+
+            if args.output_dir:
+                Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+                # write to log file with the following format {"train_lr":  "train_loss":, "test_loss": , "test_acc": , "test_f1": , "test_auroc": , "epoch": }
+                with open(os.path.join(args.output_dir, 'log.jsonl'), 'a') as f:
+                    f.write(f'{{"train_loss": {train_stats["loss"]:.4f}, "val_loss": {val_stats["loss"]:.4f}, "val_acc": {val_stats["accuracy"]:.4f}, "val_f1": {val_stats["f1"]:.4f}, "val_auroc": {val_stats["auroc"]:.4f}, "epoch": {epoch}}}\n')
+            
+            if args.output_dir:
+                torch.save(model.state_dict(), os.path.join(args.output_dir, f'checkpoint-{epoch}.pth'))
+            
+
+        total_time = time.time() - start_time
+        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        print('Training time {}'.format(total_time_str))
         
-        val_stats = evaluate(model, data_loader_val, device, criterion)
-        print(f"Epoch {epoch} | Train Loss: {train_stats['loss']:.4f} | Val Loss: {val_stats['loss']:.4f}")
+        # # stats on the training set
+        # train_stats = evaluate(model, data_loader_train, device, criterion)
+        # print(f'Accuracy: {train_stats["accuracy"]:.4f} | F1: {train_stats["f1"]:.4f} | AUROC: {train_stats["auroc"]:.4f}\n')
+    
+    else:
+        dataset_test = get_hateful_memes_dataset(args=args, split='test_seen')
+        data_loader_test = torch.utils.data.DataLoader(
+            dataset_test,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+            drop_last=False,
+        )
+        print(f"\nStart evaluation")
+        val_stats = evaluate(model, data_loader_test, device, criterion)
         print(f'Accuracy: {val_stats["accuracy"]:.4f} | F1: {val_stats["f1"]:.4f} | AUROC: {val_stats["auroc"]:.4f}\n')
 
-        if args.log_dir:
-            Path(args.log_dir).mkdir(parents=True, exist_ok=True)
-            # write to log file with the following format {"train_lr":  "train_loss":, "test_loss": , "test_acc": , "test_f1": , "test_auroc": , "epoch": }
-            with open(os.path.join(args.log_dir, 'log.jsonl'), 'a') as f:
-                f.write(f'{{"train_loss": {train_stats["loss"]:.4f}, "val_loss": {val_stats["loss"]:.4f}, "val_acc": {val_stats["accuracy"]:.4f}, "val_f1": {val_stats["f1"]:.4f}, "val_auroc": {val_stats["auroc"]:.4f}, "epoch": {epoch}}}\n')
-                
-        
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
-    
-    # stats on the training set
-    train_stats = evaluate(model, data_loader_train, device, criterion)
-    print(f'Accuracy: {train_stats["accuracy"]:.4f} | F1: {train_stats["f1"]:.4f} | AUROC: {train_stats["auroc"]:.4f}\n')
-
-    # save model
-    if args.output_dir:
-        torch.save(model.state_dict(), os.path.join(args.output_dir, 'model.pth'))
 
 if __name__ == '__main__':
     args = get_args_parser()
