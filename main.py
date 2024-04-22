@@ -57,8 +57,8 @@ def main(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    dataset_train = get_hateful_memes_dataset(args=args, split='train', strategy='KFold', fold=0, n_splits=5)
-    dataset_val = get_hateful_memes_dataset(args=args, split='val', strategy='KFold', fold=0, n_splits=5)
+    dataset_train = get_hateful_memes_dataset(args=args, split='train', strategy='KFold', fold=4, n_splits=5)
+    dataset_val = get_hateful_memes_dataset(args=args, split='val', strategy='KFold', fold=4, n_splits=5)
 
 
     print(f"Number of training examples: {len(dataset_train)}")
@@ -111,6 +111,10 @@ def main(args):
     print(f'Criterion: {criterion}')
 
 
+    # auxilliary variables
+    best_AUROC = 0.5
+    best_model = None
+    best_epoch = 0
     if not args.eval:
     # training loop
         print(f"\nStart training for {args.epochs} epochs")
@@ -127,11 +131,19 @@ def main(args):
             print(f"Epoch {epoch} | Train Loss: {train_stats['loss']:.4f} | Val Loss: {val_stats['loss']:.4f}")
             print(f'Accuracy: {val_stats["accuracy"]:.4f} | F1: {val_stats["f1"]:.4f} | AUROC: {val_stats["auroc"]:.4f}\n')
 
+            # save the best model
+            if val_stats["auroc"] > best_AUROC:
+                best_AUROC = val_stats["auroc"]
+                best_model = model.state_dict()
+                best_epoch = epoch
+
             if args.output_dir:
                 Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-                # write to log file with the following format {"train_lr":  "train_loss":, "test_loss": , "test_acc": , "test_f1": , "test_auroc": , "epoch": }
+                # compute time elapsed
+                total_time = time.time() - start_time
+                total_time_str = str(datetime.timedelta(seconds=int(total_time)))
                 with open(os.path.join(args.output_dir, 'log.jsonl'), 'a') as f:
-                    f.write(f'{{"train_loss": {train_stats["loss"]:.4f}, "val_loss": {val_stats["loss"]:.4f}, "val_acc": {val_stats["accuracy"]:.4f}, "val_f1": {val_stats["f1"]:.4f}, "val_auroc": {val_stats["auroc"]:.4f}, "epoch": {epoch}}}\n')
+                    f.write(f'{{"time": {total_time_str} ,"train_loss": {train_stats["loss"]:.4f}, "val_loss": {val_stats["loss"]:.4f}, "val_acc": {val_stats["accuracy"]:.4f}, "val_f1": {val_stats["f1"]:.4f}, "val_auroc": {val_stats["auroc"]:.4f}, "epoch": {epoch}}}\n')
             
             if args.output_dir:
                 torch.save(model.state_dict(), os.path.join(args.output_dir, f'checkpoint-{epoch}.pth'))
@@ -141,9 +153,10 @@ def main(args):
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print('Training time {}'.format(total_time_str))
         
-        # # stats on the training set
-        # train_stats = evaluate(model, data_loader_train, device, criterion)
-        # print(f'Accuracy: {train_stats["accuracy"]:.4f} | F1: {train_stats["f1"]:.4f} | AUROC: {train_stats["auroc"]:.4f}\n')
+        # save the best model
+        if best_model:
+            if args.output_dir:
+                torch.save(best_model, os.path.join(args.output_dir, f'checkpoint-best-{best_epoch}.pth'))
     
     else:
         dataset_test = get_hateful_memes_dataset(args=args, split='test_seen')
