@@ -2,12 +2,19 @@
 __pycache__/
 *.py[cod]
 *$py.class
-hateful_memes/
+# hateful_memes/
 *.ipynb
 *.pt
 *.pth
 data_augmentation/
 experiments/
+
+*.jpg
+*.jpeg
+*.png
+*.zip
+
+.DS_Store
 
 
 # C extensions
