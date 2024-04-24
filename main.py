@@ -21,6 +21,8 @@ def get_args_parser():
     parser.add_argument('--seed', default=42, type=int, help='seed for training')
     parser.add_argument('--shuffle', default=True, type=bool, help='shuffle dataset')
     parser.add_argument('--eval', action='store_true', help='evaluation only')
+    parser.add_argument('--use_propaganda', action='store_true', help='use propaganda labels')
+    parser.add_argument('--use_memotion', action='store_true', help='use memotion labels')
 
     # model parameters
     parser.add_argument('--clip_model', default='mobileclip_s0', type=str, help='CLIP model name')
@@ -31,7 +33,7 @@ def get_args_parser():
     parser.add_argument('--num_mapping_layers', default=1, type=int, help='number of mapping layers')
     parser.add_argument('--embed_dim', default=1024, type=int, help='embedding dimension')
     parser.add_argument('--pre_output_dim', default=512, type=int, help='pre-output dimension')
-    parser.add_argument('--dropouts', default=[0.2, 0.4, 0.1], type=list, help='dropouts for projection, fusion and pre-output layers')
+    parser.add_argument('--dropouts', default=[0.2, 0.4, 0.2], type=list, help='dropouts for projection, fusion and pre-output layers')
     parser.add_argument('--freeze_clip', default=True, type=bool, help='freeze the clip encoder')
 
     # training parameters
@@ -103,10 +105,8 @@ def main(args):
         {"params": [p for n, p in model.named_parameters() if p.requires_grad]}
     ]
 
-    # optimizer = torch.optim.SGD(param_dicts, lr=args.lr, weight_decay=args.weight_decay) 
-    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.999), amsgrad=True)
+    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.999), amsgrad=False)
     criterion = torch.nn.BCEWithLogitsLoss(reduction='mean')
-    #criterion = torch.nn.CrossEntropyLoss()
     print(f'Optimize: {optimizer}')
     print(f'Criterion: {criterion}')
 

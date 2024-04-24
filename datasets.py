@@ -8,7 +8,7 @@ from sklearn.model_selection import StratifiedKFold
 
 class HatefulMemesDataset(Dataset):
     def __init__(self, data_dir, img_dir, split='train', img_size=256, clip_model='mobileclip_s0', clip_dir='checkpoints',
-                 strategy='', fold=0, n_splits=5):
+                 strategy='', fold=0, n_splits=5, use_propaganda=False, use_memotion=False):
         self.data_path = data_dir
         self.img_dir = img_dir
         self.split = split
@@ -20,6 +20,15 @@ class HatefulMemesDataset(Dataset):
             self.data = get_K_fold(data_dir, n_splits=n_splits, split_idx=fold, subset=split)
         else:
             self.data = [json.loads(line) for line in open(os.path.join(data_dir, f'{split}.jsonl'), 'r')]
+
+        if use_propaganda:
+            propaganda_labels = [json.loads(line) for line in open(os.path.join('data/propaganda', 'propaganda.jsonl'), 'r')]
+            self.data += propaganda_labels
+
+        if use_memotion:
+            memotion_labels = [json.loads(line) for line in open(os.path.join('data/memotion', 'memotion.jsonl'), 'r')]
+            self.data += memotion_labels
+
         
         checkpoint_path = os.path.join(clip_dir, f'{clip_model}.pt')
         _, _, preprocess = mobileclip.create_model_and_transforms(clip_model, pretrained=checkpoint_path)
@@ -31,7 +40,14 @@ class HatefulMemesDataset(Dataset):
     
     def __getitem__(self, idx):
         img_name = self.data[idx]['img']
-        img_path = os.path.join(self.img_dir, img_name)
+        if img_name.startswith('img/memes'):
+            img_path = os.path.join('data/propaganda', img_name)
+        elif int(self.data[idx]['id']) >= 100000:
+            # print(self.data[idx])
+            img_path = os.path.join('data/memotion', img_name)
+        else:
+            img_path = os.path.join(self.img_dir, img_name)
+
         raw_img = Image.open(img_path).convert('RGB').resize((self.img_size, self.img_size))
 
         raw_text = self.data[idx]['text']
@@ -85,5 +101,7 @@ def get_hateful_memes_dataset(args, split='train', strategy='', fold=0, n_splits
         clip_dir=args.clip_checkpoint,
         strategy=strategy,
         fold=fold,
-        n_splits=n_splits
+        n_splits=n_splits,
+        use_propaganda=args.use_propaganda,
+        use_memotion=args.use_memotion
         )
