@@ -31,7 +31,7 @@ def get_args_parser():
     parser.add_argument('--fusion', default='align', type=str, help='fusion method')
     parser.add_argument('--num_pre_output_layers', default=2, type=int, help='number of pre-output layers')
     parser.add_argument('--num_mapping_layers', default=1, type=int, help='number of mapping layers')
-    parser.add_argument('--embed_dim', default=1024, type=int, help='embedding dimension')
+    parser.add_argument('--embed_dim', default=512, type=int, help='embedding dimension')
     parser.add_argument('--pre_output_dim', default=512, type=int, help='pre-output dimension')
     parser.add_argument('--dropouts', default=[0.2, 0.4, 0.2], type=list, help='dropouts for projection, fusion and pre-output layers')
     parser.add_argument('--freeze_clip', default=True, type=bool, help='freeze the clip encoder')
@@ -42,7 +42,7 @@ def get_args_parser():
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight decay')
     parser.add_argument('--clip_grad_norm', default=0.1, type=float, help='clip grad norm')
-    parser.add_argument('--epochs', default=10, type=int, help='number of training epochs')
+    parser.add_argument('--epochs', default=20, type=int, help='number of training epochs')
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
 
     return parser
@@ -59,8 +59,10 @@ def main(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    dataset_train = get_hateful_memes_dataset(args=args, split='train', strategy='KFold', fold=4, n_splits=5)
-    dataset_val = get_hateful_memes_dataset(args=args, split='val', strategy='KFold', fold=4, n_splits=5)
+    # dataset_train = get_hateful_memes_dataset(args=args, split='train', strategy='KFold', fold=4, n_splits=5)
+    # dataset_val = get_hateful_memes_dataset(args=args, split='val', strategy='KFold', fold=4, n_splits=5)
+    dataset_train = get_hateful_memes_dataset(args=args, split='train')
+    dataset_val = get_hateful_memes_dataset(args=args, split='dev_seen')
 
 
     print(f"Number of training examples: {len(dataset_train)}")
@@ -145,8 +147,8 @@ def main(args):
                 with open(os.path.join(args.output_dir, 'log.jsonl'), 'a') as f:
                     f.write(f'{{"time": {total_time_str} ,"train_loss": {train_stats["loss"]:.4f}, "val_loss": {val_stats["loss"]:.4f}, "val_acc": {val_stats["accuracy"]:.4f}, "val_f1": {val_stats["f1"]:.4f}, "val_auroc": {val_stats["auroc"]:.4f}, "epoch": {epoch}}}\n')
             
-            if args.output_dir:
-                torch.save(model.state_dict(), os.path.join(args.output_dir, f'checkpoint-{epoch}.pth'))
+            # if args.output_dir:
+            #     torch.save(model.state_dict(), os.path.join(args.output_dir, f'checkpoint-{epoch}.pth'))
             
 
         total_time = time.time() - start_time
@@ -171,6 +173,10 @@ def main(args):
         print(f"\nStart evaluation")
         val_stats = evaluate(model, data_loader_test, device, criterion)
         print(f'Accuracy: {val_stats["accuracy"]:.4f} | F1: {val_stats["f1"]:.4f} | AUROC: {val_stats["auroc"]:.4f}\n')
+        # save stats to val.jsonl
+        if args.output_dir:
+            with open(os.path.join(args.output_dir, 'test.jsonl'), 'w') as f:
+                f.write(f'{{"accuracy": {val_stats["accuracy"]:.4f}, "f1": {val_stats["f1"]:.4f}, "auroc": {val_stats["auroc"]:.4f}}}\n')
 
 
 if __name__ == '__main__':
