@@ -72,22 +72,26 @@ class MobileHateClipper(nn.Module):
         text_features = F.normalize(text_features, p=2, dim=1)
 
 
-        # FMI fusion
+        # FMI (Features Interation Matrix) fusion and save it the for visualization
         if self.fusion == "align":
             features = torch.mul(image_features, text_features) # [N, d]
+            fim = features
         elif self.fusion == "concat":
             features = torch.cat([image_features, text_features], dim=1)
+            fim = features
         elif self.fusion == "cross":
             features = torch.bmm(image_features.unsqueeze(2), text_features.unsqueeze(1)) # [N, d, d]
+            fim = features
             features = features.view(-1, self.embed_dim ** 2)
         else:
             raise ValueError("Invalid fusion method")
-        
+                
+                
         # pre-output layers
         features = self.pre_output_layers(features)
         logits = self.output_layer(features)
 
-        return logits
+        return logits, fim
     
 
 

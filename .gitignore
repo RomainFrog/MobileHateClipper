@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 # hateful_memes/
 *.ipynb
+!interpretability.ipynb
 *.pt
 *.pth
 data_augmentation/
